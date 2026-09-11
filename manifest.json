@@ -3,7 +3,7 @@
   "id": "blindtype",
   "name": "Blind Type",
   "version": "1.0.0",
-  "author": "You",
+  "author": "Anton Milman",
   "license": "MIT",
   "description": "Learn touch typing with a guided, level-based curriculum. Tracks accuracy, WPM, streaks, and weak keys. Fully theme-aware.",
   "kinds": [

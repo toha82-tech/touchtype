@@ -64,6 +64,10 @@ you copied this from an already-configured machine; otherwise):
 | `Curriculum.js` | 10-level curriculum definitions + drill-text generators. |
 | `ProgressStore.js` | Progress persistence, accuracy/WPM/streak calculators. |
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Development notes
 
 - Validated with `qmllint` (only the standard false-positive categories that
