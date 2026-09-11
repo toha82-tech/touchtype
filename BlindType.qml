@@ -1,0 +1,705 @@
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+import QtQuick
+import qs.Commons
+import qs.Ui
+import "Curriculum.js" as Curriculum
+import "Corpus.js" as Corpus
+import "ProgressStore.js" as Progress
+
+// Blind Type — guided touch-typing trainer overlay.
+//
+// Screens: "menu" (level select + streak/stats), "lesson" (live typing
+// session with keyboard hint), "results" (accuracy/wpm/time + pass/fail +
+// weak-key summary). All colors come from the Color singleton so the whole
+// UI follows whatever Omarchy theme is active; only the typing font is
+// forced to monospace for legibility of the target text.
+Item {
+  id: root
+
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+  property var shell: null
+  property var manifest: null
+
+  property bool opened: false
+  property string screen: "menu"   // "menu" | "lesson" | "results"
+
+  // ---- theme surface -------------------------------------------------
+  property color background: Color.popups.background
+  property color foreground: Color.popups.text
+  property color border: Color.popups.border
+  property var borderSpec: Border.surfaceSpec("popups", "border", root.border, Math.max(1, Style.space(2)))
+  property color scrim: Color.menu.scrim
+  readonly property int cornerRadius: Style.cornerRadius
+  property string monoFont: "monospace"
+
+  property int cardWidth: Math.min(Style.space(920), panel.width - Style.gapsOut * 2)
+  property int cardHeight: Math.min(Style.space(640), panel.height - Style.gapsOut * 2)
+
+  // ---- progress persistence -------------------------------------------
+  property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/blindtype-progress.json"
+  property var progress: Progress.defaultProgress()
+  readonly property var levelList: Curriculum.levels(Corpus.punctuationChars)
+
+  function saveProgress() {
+    progressFile.setText(Progress.toJsonText(root.progress))
+  }
+
+  // ---- level select state ---------------------------------------------
+  property int selectedIndex: 0
+
+  // ---- session state ----------------------------------------------------
+  property int currentLevelIndex: -1
+  property string targetText: ""
+  property var typedResults: []   // true/false per typed position, undefined = not yet typed
+  property int typedIndex: 0
+  property var sessionKeyResults: ({})
+  property double sessionStart: 0
+  property bool sessionStarted: false
+  property bool sessionFinished: false
+  property double liveNow: Date.now()
+  property int renderTick: 0
+
+  // ---- last result (for the results screen) ---------------------------
+  property var lastResult: null
+
+  readonly property var currentLevel: root.currentLevelIndex >= 0 ? root.levelList[root.currentLevelIndex] : null
+
+  function open(payloadJson) {
+    root.opened = true
+    root.screen = "menu"
+    root.selectedIndex = 0
+    // Re-read progress from disk each time the overlay is summoned so an
+    // external change (e.g. the "Reset progress" menu action, or another
+    // instance) is reflected immediately instead of showing stale state.
+    progressFile.reload()
+    Qt.callLater(function() { menuKeyCatcher.forceActiveFocus() })
+  }
+
+  function close() {
+    root.opened = false
+  }
+
+  function dismiss() {
+    root.opened = false
+    if (root.shell && typeof root.shell.hide === "function")
+      root.shell.hide((root.manifest && root.manifest.id) || "blindtype")
+  }
+
+  function toggle() {
+    if (root.opened) root.dismiss()
+    else root.open("{}")
+  }
+
+  // ---- level helpers ----------------------------------------------------
+  function unlocked(index) {
+    return Progress.isUnlocked(root.progress, root.levelList, index)
+  }
+
+  function levelEntry(index) {
+    return Progress.levelEntry(root.progress, root.levelList[index].id)
+  }
+
+  function wordListFn(name) {
+    return Corpus.wordList(name)
+  }
+
+  function startLevel(index) {
+    if (!root.unlocked(index)) return
+    root.currentLevelIndex = index
+    root.targetText = Curriculum.buildDrill(root.levelList[index], Math.random, root.wordListFn, Corpus.sentences)
+    root.typedResults = []
+    root.typedIndex = 0
+    root.sessionKeyResults = {}
+    root.sessionStarted = false
+    root.sessionFinished = false
+    root.liveNow = Date.now()
+    root.renderTick++
+    root.screen = "lesson"
+    Qt.callLater(function() { lessonKeyCatcher.forceActiveFocus() })
+  }
+
+  function restartLevel() {
+    if (root.currentLevelIndex >= 0) root.startLevel(root.currentLevelIndex)
+  }
+
+  function backToMenu() {
+    root.screen = "menu"
+    Qt.callLater(function() { menuKeyCatcher.forceActiveFocus() })
+  }
+
+  function recordKeyResult(expected, correct) {
+    var stat = root.sessionKeyResults[expected] || { hits: 0, misses: 0 }
+    if (correct) stat.hits++; else stat.misses++
+    root.sessionKeyResults[expected] = stat
+  }
+
+  function handleTypedChar(ch) {
+    if (root.sessionFinished || root.typedIndex >= root.targetText.length) return
+    if (!root.sessionStarted) {
+      root.sessionStarted = true
+      root.sessionStart = Date.now()
+      liveTimer.start()
+    }
+    var expected = root.targetText.charAt(root.typedIndex)
+    var correct = ch === expected
+    root.typedResults[root.typedIndex] = correct
+    root.recordKeyResult(expected, correct)
+    root.typedIndex++
+    root.renderTick++
+    if (root.typedIndex >= root.targetText.length) root.finishSession()
+  }
+
+  function handleBackspace() {
+    if (root.typedIndex <= 0 || root.sessionFinished) return
+    root.typedIndex--
+    root.typedResults[root.typedIndex] = undefined
+    root.renderTick++
+  }
+
+  function finishSession() {
+    liveTimer.stop()
+    root.sessionFinished = true
+    var elapsedMs = Math.max(1, Date.now() - root.sessionStart)
+    var correctCount = 0
+    for (var i = 0; i < root.typedResults.length; i++) if (root.typedResults[i] === true) correctCount++
+    var accuracy = Progress.computeAccuracy(correctCount, root.typedResults.length)
+    var wpm = Progress.computeWpm(correctCount, elapsedMs)
+    var result = { accuracy: accuracy, wpm: wpm, timeMs: elapsedMs, keyResults: root.sessionKeyResults }
+    var outcome = Progress.recordAttempt(root.progress, root.currentLevel, result)
+    root.progress = outcome.progress
+    root.saveProgress()
+    root.lastResult = { accuracy: accuracy, wpm: wpm, timeMs: elapsedMs, passed: outcome.passed }
+    root.screen = "results"
+    Qt.callLater(function() { resultsKeyCatcher.forceActiveFocus() })
+  }
+
+  function nextLevelAvailable() {
+    return root.currentLevelIndex >= 0
+      && root.currentLevelIndex + 1 < root.levelList.length
+      && root.unlocked(root.currentLevelIndex + 1)
+  }
+
+  function goToNextLevel() {
+    if (root.nextLevelAvailable()) root.startLevel(root.currentLevelIndex + 1)
+  }
+
+  // ---- rich-text rendering of the typed/target text ---------------------
+  function toHex2(n) {
+    var h = Math.round(Util.clamp(n, 0, 1) * 255).toString(16)
+    return h.length < 2 ? "0" + h : h
+  }
+
+  function colorHex(c) {
+    return "#" + root.toHex2(c.r) + root.toHex2(c.g) + root.toHex2(c.b)
+  }
+
+  function escapeHtml(ch) {
+    if (ch === "&") return "&amp;"
+    if (ch === "<") return "&lt;"
+    if (ch === ">") return "&gt;"
+    if (ch === "'") return "&#39;"
+    if (ch === "\"") return "&quot;"
+    return ch
+  }
+
+  readonly property string renderedHtml: {
+    root.renderTick // reactive dependency: bumped manually on every keystroke
+    var target = root.targetText
+    var out = ""
+    var correctColor = root.colorHex(Color.foreground)
+    var errorColor = root.colorHex(Color.urgent)
+    var pendingColor = root.colorHex(Color.muted)
+    var caretColor = root.colorHex(Color.accent)
+    for (var i = 0; i < target.length; i++) {
+      var ch = root.escapeHtml(target.charAt(i))
+      var style
+      if (i < root.typedIndex) {
+        style = root.typedResults[i] === true
+          ? ("color:" + correctColor)
+          : ("color:" + errorColor + ";text-decoration:underline")
+      } else if (i === root.typedIndex) {
+        style = "color:" + caretColor + ";text-decoration:underline"
+      } else {
+        style = "color:" + pendingColor
+      }
+      out += "<span style='" + style + "'>" + ch + "</span>"
+    }
+    return out
+  }
+
+  readonly property string nextChar: root.targetText.length > root.typedIndex ? root.targetText.charAt(root.typedIndex) : ""
+
+  // ---- live stats (lesson screen) ---------------------------------------
+  readonly property double elapsedMs: {
+    root.liveNow // reactive dependency
+    return root.sessionStarted ? Math.max(0, root.liveNow - root.sessionStart) : 0
+  }
+  readonly property int liveCorrectCount: {
+    root.renderTick
+    var n = 0
+    for (var i = 0; i < root.typedResults.length; i++) if (root.typedResults[i] === true) n++
+    return n
+  }
+  readonly property real liveAccuracy: Progress.computeAccuracy(root.liveCorrectCount, root.typedIndex)
+  readonly property int liveWpm: Progress.computeWpm(root.liveCorrectCount, root.elapsedMs)
+
+  Timer {
+    id: liveTimer
+    interval: 200
+    repeat: true
+    onTriggered: root.liveNow = Date.now()
+  }
+
+  FileView {
+    id: progressFile
+    path: root.progressPath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.progress = Progress.parse(text())
+    onLoadFailed: root.progress = Progress.defaultProgress()
+  }
+
+  PanelWindow {
+    id: panel
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    WlrLayershell.namespace: "omarchy-blindtype"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
+
+    Rectangle {
+      anchors.fill: parent
+      color: root.scrim
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: root.dismiss()
+    }
+
+    BorderSurface {
+      id: card
+      width: root.cardWidth
+      height: root.cardHeight
+      radius: root.cornerRadius
+      anchors.centerIn: parent
+      color: root.background
+      borderSpec: root.borderSpec
+      padding: Style.spacing.panelPadding
+
+      MouseArea { anchors.fill: parent; onClicked: {} }
+
+      Item {
+        id: content
+        anchors.fill: parent
+        anchors.topMargin: card.contentTopInset
+        anchors.rightMargin: card.contentRightInset
+        anchors.bottomMargin: card.contentBottomInset
+        anchors.leftMargin: card.contentLeftInset
+
+        // ================= MENU SCREEN =================
+        Item {
+          id: menuScreen
+          anchors.fill: parent
+          visible: root.screen === "menu"
+
+          Item {
+            id: menuKeyCatcher
+            anchors.fill: parent
+            focus: root.screen === "menu"
+
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) { root.dismiss(); event.accepted = true }
+              else if (event.key === Qt.Key_Up) { root.selectedIndex = Math.max(0, root.selectedIndex - 1); event.accepted = true }
+              else if (event.key === Qt.Key_Down) { root.selectedIndex = Math.min(root.levelList.length - 1, root.selectedIndex + 1); event.accepted = true }
+              else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.startLevel(root.selectedIndex); event.accepted = true }
+              else if (event.text >= "1" && event.text <= "9") { root.selectedIndex = event.text.charCodeAt(0) - "1".charCodeAt(0); event.accepted = true }
+              else if (event.text === "0") { root.selectedIndex = 9; event.accepted = true }
+            }
+          }
+
+          Column {
+            anchors.fill: parent
+            spacing: Style.spacing.lg
+
+            Item {
+              width: parent.width
+              height: Math.max(closeButton.height, streakBadge.height, titleText.height)
+
+              Text {
+                id: titleText
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Blind Type"
+                color: root.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.display
+                font.bold: true
+              }
+
+              Rectangle {
+                id: closeButton
+                width: Style.space(28); height: Style.space(28)
+                radius: width / 2
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                color: closeArea.containsMouse ? Util.alpha(Color.urgent, 0.2) : "transparent"
+                Text { anchors.centerIn: parent; text: "✕"; color: root.foreground; font.pixelSize: Style.font.body }
+                MouseArea { id: closeArea; anchors.fill: parent; hoverEnabled: true; onClicked: root.dismiss() }
+              }
+
+              Row {
+                id: streakBadge
+                spacing: Style.spacing.xs
+                anchors.right: closeButton.left
+                anchors.rightMargin: Style.spacing.lg
+                anchors.verticalCenter: parent.verticalCenter
+                Text { text: "🔥"; font.pixelSize: Style.font.heading }
+                Text {
+                  text: (root.progress.streak.count || 0) + " day streak"
+                  color: root.foreground
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
+            }
+
+            Text {
+              text: "Guided touch-typing levels. Use ↑↓ + Enter, number keys, or click a level."
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Util.alpha(root.foreground, 0.1) }
+
+            Column {
+              width: parent.width
+              spacing: Style.spacing.sm
+
+              Repeater {
+                model: root.levelList
+
+                Rectangle {
+                  id: levelRow
+                  required property var modelData
+                  required property int index
+                  readonly property bool isSelected: index === root.selectedIndex
+                  readonly property bool isUnlocked: root.unlocked(index)
+                  readonly property var entry: root.levelEntry(index)
+
+                  width: parent.width
+                  height: Style.space(52)
+                  radius: Math.min(root.cornerRadius, 10)
+                  color: isSelected ? Util.alpha(Color.accent, 0.14) : "transparent"
+                  border.width: isSelected ? 1 : 0
+                  border.color: Color.accent
+                  opacity: isUnlocked ? 1 : 0.5
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: levelRow.isUnlocked ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onEntered: root.selectedIndex = levelRow.index
+                    onClicked: root.startLevel(levelRow.index)
+                  }
+
+                  Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: Style.spacing.md
+                    anchors.rightMargin: Style.spacing.md
+                    spacing: Style.spacing.md
+
+                    Text {
+                      width: Style.space(28)
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: levelRow.isUnlocked ? String(levelRow.index + 1) : "🔒"
+                      color: levelRow.entry.passed ? Color.accent : root.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.heading
+                      horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Column {
+                      width: parent.width - Style.space(28) - statsCol.width - Style.spacing.md * 2
+                      anchors.verticalCenter: parent.verticalCenter
+                      Text {
+                        text: (levelRow.entry.passed ? "✓ " : "") + levelRow.modelData.title
+                        color: root.foreground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        font.bold: true
+                      }
+                      Text {
+                        text: levelRow.modelData.subtitle
+                        color: Color.muted
+                        font.family: root.monoFont
+                        font.pixelSize: Style.font.bodySmall
+                      }
+                    }
+
+                    Column {
+                      id: statsCol
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: Style.space(140)
+                      Text {
+                        visible: levelRow.entry.attempts > 0
+                        text: "Best: " + levelRow.entry.bestWpm + " wpm · " + levelRow.entry.bestAccuracy + "%"
+                        color: Color.muted
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        horizontalAlignment: Text.AlignRight
+                        anchors.right: parent.right
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // ================= LESSON SCREEN =================
+        Item {
+          id: lessonScreen
+          anchors.fill: parent
+          visible: root.screen === "lesson"
+
+          Item {
+            id: lessonKeyCatcher
+            anchors.fill: parent
+            focus: root.screen === "lesson"
+
+            Keys.priority: Keys.BeforeItem
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) { root.backToMenu(); event.accepted = true }
+              else if (event.key === Qt.Key_Backspace) { root.handleBackspace(); event.accepted = true }
+              else if (event.text && event.text.length === 1 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127) {
+                root.handleTypedChar(event.text)
+                event.accepted = true
+              }
+            }
+          }
+
+          Column {
+            anchors.fill: parent
+            spacing: Style.spacing.lg
+
+            Item {
+              width: parent.width
+              height: lessonTitle.height
+
+              Text {
+                id: lessonTitle
+                anchors.left: parent.left
+                text: root.currentLevel ? ((root.currentLevelIndex + 1) + ". " + root.currentLevel.title) : ""
+                color: root.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.heading
+                font.bold: true
+              }
+              Text {
+                anchors.right: parent.right
+                anchors.verticalCenter: lessonTitle.verticalCenter
+                text: "Esc: menu"
+                color: Color.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.spacing.xxl
+
+              Text {
+                text: "⏱ " + (Math.floor(root.elapsedMs / 1000)) + "s"
+                color: Color.muted
+                font.family: root.monoFont
+                font.pixelSize: Style.font.body
+              }
+              Text {
+                text: "⌨ " + root.liveWpm + " wpm"
+                color: Color.muted
+                font.family: root.monoFont
+                font.pixelSize: Style.font.body
+              }
+              Text {
+                text: "🎯 " + root.liveAccuracy + "%"
+                color: root.currentLevel && root.liveAccuracy >= root.currentLevel.passAccuracy ? Color.accent : Color.urgent
+                font.family: root.monoFont
+                font.pixelSize: Style.font.body
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: Style.space(4)
+              radius: height / 2
+              color: Util.alpha(root.foreground, 0.1)
+              Rectangle {
+                width: parent.width * (root.targetText.length > 0 ? root.typedIndex / root.targetText.length : 0)
+                height: parent.height
+                radius: height / 2
+                color: Color.accent
+                Behavior on width { NumberAnimation { duration: 120 } }
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: Style.space(150)
+              radius: Math.min(root.cornerRadius, 10)
+              color: Util.alpha(root.foreground, 0.04)
+              border.width: 1
+              border.color: Util.alpha(root.foreground, 0.12)
+
+              Text {
+                anchors.fill: parent
+                anchors.margins: Style.spacing.lg
+                text: root.renderedHtml
+                textFormat: Text.RichText
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+                font.family: root.monoFont
+                font.pixelSize: Style.font.heading
+                lineHeight: 1.5
+              }
+            }
+
+            Item { width: 1; height: Style.spacing.md }
+
+            Keyboard {
+              anchors.horizontalCenter: parent.horizontalCenter
+              nextChar: root.nextChar
+            }
+          }
+        }
+
+        // ================= RESULTS SCREEN =================
+        Item {
+          id: resultsScreen
+          anchors.fill: parent
+          visible: root.screen === "results"
+
+          Item {
+            id: resultsKeyCatcher
+            anchors.fill: parent
+            focus: root.screen === "results"
+
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) { root.backToMenu(); event.accepted = true }
+              else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.restartLevel(); event.accepted = true }
+              else if (event.text === "n" || event.text === "N") { root.goToNextLevel(); event.accepted = true }
+            }
+          }
+
+          Column {
+            anchors.centerIn: parent
+            spacing: Style.spacing.lg
+            width: Math.min(parent.width * 0.8, Style.space(560))
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: root.lastResult && root.lastResult.passed ? "✓ Level passed!" : "Keep practicing"
+              color: root.lastResult && root.lastResult.passed ? Color.accent : root.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.displayLarge
+              font.bold: true
+            }
+
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.spacing.xxxl
+
+              Column {
+                spacing: Style.spacing.xs
+                Text { text: root.lastResult ? root.lastResult.accuracy + "%" : ""; color: root.foreground; font.family: root.monoFont; font.pixelSize: Style.font.display; anchors.horizontalCenter: parent.horizontalCenter }
+                Text { text: "accuracy"; color: Color.muted; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.horizontalCenter: parent.horizontalCenter }
+              }
+              Column {
+                spacing: Style.spacing.xs
+                Text { text: root.lastResult ? root.lastResult.wpm : ""; color: root.foreground; font.family: root.monoFont; font.pixelSize: Style.font.display; anchors.horizontalCenter: parent.horizontalCenter }
+                Text { text: "wpm"; color: Color.muted; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.horizontalCenter: parent.horizontalCenter }
+              }
+              Column {
+                spacing: Style.spacing.xs
+                Text { text: root.lastResult ? Math.round(root.lastResult.timeMs / 1000) + "s" : ""; color: root.foreground; font.family: root.monoFont; font.pixelSize: Style.font.display; anchors.horizontalCenter: parent.horizontalCenter }
+                Text { text: "time"; color: Color.muted; font.family: Style.font.family; font.pixelSize: Style.font.caption; anchors.horizontalCenter: parent.horizontalCenter }
+              }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Util.alpha(root.foreground, 0.1) }
+
+            Column {
+              width: parent.width
+              spacing: Style.spacing.sm
+              visible: weakKeysRepeater.count > 0
+
+              Text {
+                text: "Weakest keys"
+                color: root.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.bold: true
+              }
+
+              Repeater {
+                id: weakKeysRepeater
+                model: Progress.weakestKeys(root.progress, 5)
+
+                Row {
+                  required property var modelData
+                  width: parent.width
+                  spacing: Style.spacing.sm
+
+                  Text {
+                    text: "'" + modelData.key + "'"
+                    color: root.foreground
+                    font.family: root.monoFont
+                    font.pixelSize: Style.font.bodySmall
+                    width: Style.space(36)
+                  }
+                  Rectangle {
+                    width: parent.width - Style.space(36) - Style.space(50) - Style.spacing.sm * 2
+                    height: Style.space(10)
+                    radius: height / 2
+                    color: Util.alpha(root.foreground, 0.1)
+                    anchors.verticalCenter: parent.verticalCenter
+                    Rectangle {
+                      width: parent.width * modelData.missRate
+                      height: parent.height
+                      radius: height / 2
+                      color: Color.urgent
+                    }
+                  }
+                  Text {
+                    text: Math.round(modelData.missRate * 100) + "%"
+                    color: Color.muted
+                    font.family: root.monoFont
+                    font.pixelSize: Style.font.caption
+                    width: Style.space(50)
+                  }
+                }
+              }
+            }
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "Enter: retry" + (root.nextLevelAvailable() ? "   ·   N: next level" : "") + "   ·   Esc: menu"
+              color: Color.muted
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
+      }
+    }
+  }
+}
