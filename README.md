@@ -17,40 +17,72 @@ whatever Omarchy theme you have active.
   built from your per-key hit/miss stats.
 - Daily streak tracking and best-score-per-level persistence.
 - Compact bar-widget indicator (current level + streak), click to open.
-- Omarchy menu integration: `Trigger → Blind Type → Open trainer / Reset progress`.
+- Optional Omarchy menu shortcuts: `Trigger → Blind Type → Open trainer / Reset progress`.
 
 ## Install
 
-Copy (or symlink) this directory into your Omarchy plugins folder:
-
 ```bash
-cp -r . ~/.config/omarchy/plugins/blindtype
-# or, to keep developing here and have the shell pick up live edits:
-ln -s "$(pwd)" ~/.config/omarchy/plugins/blindtype
+omarchy plugin add https://github.com/toha82-tech/blindtype.git --enable
 ```
 
-Then register the bar widget and menu entries (already done automatically if
-you copied this from an already-configured machine; otherwise):
+That's it — this clones the plugin into `~/.config/omarchy/plugins/blindtype`,
+registers it with the running shell, and places the bar indicator for you
+(you'll be prompted to pick left/center/right, or pass
+`--enable` non-interactively and move it later with
+`omarchy bar move blindtype --section right`).
 
-1. Add `{"id": "blindtype"}` to `bar.layout.right` (or another section) in
-   `~/.config/omarchy/shell.json`.
-2. Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
-   ```jsonc
-   "trigger.blindtype": {"icon":"⌨","label":"Blind Type","aliases":["blindtype","typing"]},
-   "trigger.blindtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle blindtype"},
-   "trigger.blindtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/blindtype-progress.json && omarchy-notification-send 'Blind Type' 'Progress reset'"}
-   ```
-3. Reload: `omarchy-shell shell rescanPlugins` (or `omarchy restart shell`).
+If you'd rather install manually (e.g. for local development):
+
+```bash
+git clone https://github.com/toha82-tech/blindtype.git ~/.config/omarchy/plugins/blindtype
+omarchy plugin enable blindtype --section right
+```
+
+### Optional: menu shortcuts
+
+The bar icon alone is enough to open the trainer, but if you'd also like it
+reachable from the Omarchy launcher menu (`Trigger → Blind Type`), add these
+lines to `~/.config/omarchy/extensions/omarchy-menu.jsonc` (this file is
+user-owned config, not something a plugin installer can safely write to for
+you):
+
+```jsonc
+"trigger.blindtype": {"icon":"⌨","label":"Blind Type","aliases":["blindtype","typing"]},
+"trigger.blindtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle blindtype"},
+"trigger.blindtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/blindtype-progress.json && omarchy-notification-send 'Blind Type' 'Progress reset'"}
+```
+
+The file hot-reloads on save — no restart needed.
 
 ## Usage
 
-- Click the ⌨ bar indicator, or use the Omarchy menu
-  (`Trigger → Blind Type → Open trainer`), or run
-  `omarchy-shell shell toggle blindtype`.
+- Click the ⌨ bar indicator, or run `omarchy-shell shell toggle blindtype`,
+  or (if you added the optional menu entries) use
+  `Trigger → Blind Type → Open trainer`.
 - Navigate levels with `↑`/`↓` + `Enter`, number keys, or mouse click.
 - `Esc` returns to the previous screen / closes the overlay.
 - Progress is stored at `~/.local/state/omarchy/blindtype-progress.json`.
-  Reset anytime via the menu's "Reset progress" action.
+  Reset anytime by deleting that file, or via the optional menu's
+  "Reset progress" action.
+
+## Uninstall
+
+```bash
+omarchy plugin remove blindtype
+```
+
+This disables the plugin, removes its bar placement, and deletes
+`~/.config/omarchy/plugins/blindtype` (a timestamped backup is kept
+automatically alongside it, e.g. `.blindtype.bak.<timestamp>`, in case you
+want to restore it).
+
+To also remove saved progress and the optional menu entries:
+
+```bash
+rm -f ~/.local/state/omarchy/blindtype-progress.json
+# and remove the three trigger.blindtype* lines you added to
+# ~/.config/omarchy/extensions/omarchy-menu.jsonc, if you added them
+```
 
 ## Files
 
