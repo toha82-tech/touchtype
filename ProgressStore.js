@@ -1,4 +1,4 @@
-// Progress persistence and stat calculations for the Blind Type trainer.
+// Progress persistence and stat calculations for the Touch Type trainer.
 // Pure JS, no imports — operates on plain JSON-shaped objects so it can be
 // round-tripped straight to/from FileView.setText()/text().
 .pragma library
@@ -9,7 +9,8 @@ function defaultProgress() {
     levels: {},
     keyStats: {},
     streak: { count: 0, lastDay: "" },
-    totals: { sessions: 0, timeMs: 0 }
+    totals: { sessions: 0, timeMs: 0 },
+    unlockAll: false
   }
 }
 
@@ -46,6 +47,7 @@ function parse(raw) {
     base.totals.sessions = Number(data.totals.sessions) || 0
     base.totals.timeMs = Number(data.totals.timeMs) || 0
   }
+  if (data.unlockAll !== undefined) base.unlockAll = !!data.unlockAll
   return base
 }
 
@@ -54,6 +56,7 @@ function toJsonText(progress) {
 }
 
 function isUnlocked(progress, levelList, index) {
+  if (progress.unlockAll) return true
   if (index <= 0) return true
   var prev = levelList[index - 1]
   var entry = progress.levels[prev.id]

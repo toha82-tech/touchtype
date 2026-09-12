@@ -1,6 +1,6 @@
-# Blind Type
+# Touch Type
 
-A guided, level-based touch-typing (blind typing) trainer plugin for the
+A guided, level-based touch-typing trainer plugin for the
 [Omarchy](https://omarchy.org/) shell (Quickshell). Fully theme-aware — it
 reuses Omarchy's `Color`/`Style` design tokens, so it automatically matches
 whatever Omarchy theme you have active.
@@ -17,70 +17,70 @@ whatever Omarchy theme you have active.
   built from your per-key hit/miss stats.
 - Daily streak tracking and best-score-per-level persistence.
 - Compact bar-widget indicator (current level + streak), click to open.
-- Optional Omarchy menu shortcuts: `Trigger → Blind Type → Open trainer / Reset progress`.
+- Omarchy menu integration: `Trigger → Touch Type → Open trainer / Reset progress`.
 
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/toha82-tech/blindtype.git --enable
+omarchy plugin add https://github.com/toha82-tech/touchtype.git --enable
 ```
 
-That's it — this clones the plugin into `~/.config/omarchy/plugins/blindtype`,
+That's it — this clones the plugin into `~/.config/omarchy/plugins/touchtype`,
 registers it with the running shell, and places the bar indicator for you
 (you'll be prompted to pick left/center/right, or pass
 `--enable` non-interactively and move it later with
-`omarchy bar move blindtype --section right`).
+`omarchy bar move touchtype --section right`).
 
 If you'd rather install manually (e.g. for local development):
 
 ```bash
-git clone https://github.com/toha82-tech/blindtype.git ~/.config/omarchy/plugins/blindtype
-omarchy plugin enable blindtype --section right
+git clone https://github.com/toha82-tech/touchtype.git ~/.config/omarchy/plugins/touchtype
+omarchy plugin enable touchtype --section right
 ```
 
 ### Optional: menu shortcuts
 
 The bar icon alone is enough to open the trainer, but if you'd also like it
-reachable from the Omarchy launcher menu (`Trigger → Blind Type`), add these
+reachable from the Omarchy launcher menu (`Trigger → Touch Type`), add these
 lines to `~/.config/omarchy/extensions/omarchy-menu.jsonc` (this file is
 user-owned config, not something a plugin installer can safely write to for
 you):
 
 ```jsonc
-"trigger.blindtype": {"icon":"⌨","label":"Blind Type","aliases":["blindtype","typing"]},
-"trigger.blindtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle blindtype"},
-"trigger.blindtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/blindtype-progress.json && omarchy-notification-send 'Blind Type' 'Progress reset'"}
+"trigger.touchtype": {"icon":"⌨","label":"Touch Type","aliases":["touchtype","typing"]},
+"trigger.touchtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle touchtype"},
+"trigger.touchtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/touchtype-progress.json && omarchy-notification-send 'Touch Type' 'Progress reset'"}
 ```
 
 The file hot-reloads on save — no restart needed.
 
 ## Usage
 
-- Click the ⌨ bar indicator, or run `omarchy-shell shell toggle blindtype`,
+- Click the ⌨ bar indicator, or run `omarchy-shell shell toggle touchtype`,
   or (if you added the optional menu entries) use
-  `Trigger → Blind Type → Open trainer`.
+  `Trigger → Touch Type → Open trainer`.
 - Navigate levels with `↑`/`↓` + `Enter`, number keys, or mouse click.
 - `Esc` returns to the previous screen / closes the overlay.
-- Progress is stored at `~/.local/state/omarchy/blindtype-progress.json`.
+- Progress is stored at `~/.local/state/omarchy/touchtype-progress.json`.
   Reset anytime by deleting that file, or via the optional menu's
   "Reset progress" action.
 
 ## Uninstall
 
 ```bash
-omarchy plugin remove blindtype
+omarchy plugin remove touchtype
 ```
 
 This disables the plugin, removes its bar placement, and deletes
-`~/.config/omarchy/plugins/blindtype` (a timestamped backup is kept
-automatically alongside it, e.g. `.blindtype.bak.<timestamp>`, in case you
+`~/.config/omarchy/plugins/touchtype` (a timestamped backup is kept
+automatically alongside it, e.g. `.touchtype.bak.<timestamp>`, in case you
 want to restore it).
 
 To also remove saved progress and the optional menu entries:
 
 ```bash
-rm -f ~/.local/state/omarchy/blindtype-progress.json
-# and remove the three trigger.blindtype* lines you added to
+rm -f ~/.local/state/omarchy/touchtype-progress.json
+# and remove the three trigger.touchtype* lines you added to
 # ~/.config/omarchy/extensions/omarchy-menu.jsonc, if you added them
 ```
 
@@ -89,7 +89,7 @@ rm -f ~/.local/state/omarchy/blindtype-progress.json
 | File | Purpose |
 |---|---|
 | `manifest.json` | Plugin manifest (id, kinds, entry points). |
-| `BlindType.qml` | Main overlay: menu/lesson/results screens, state machine, persistence. |
+| `TouchType.qml` | Main overlay: menu/lesson/results screens, state machine, persistence. |
 | `Keyboard.qml` | On-screen QWERTY keyboard visual, theme-derived colors. |
 | `BarWidget.qml` | Compact bar indicator (level + streak). |
 | `Corpus.js` | Word/sentence/punctuation data banks. |
