@@ -1,11 +1,14 @@
 # Touch Type
 
+Touch (Blind) typing is hugely overrated in the age of AI, but if you want to go old-school and actually use a keyboard, you better be quick.
+Enjoy training Touch typing using this plugin while you agent is writing your code.
+
+## Features
+
 A guided, level-based touch-typing trainer plugin for the
 [Omarchy](https://omarchy.org/) shell (Quickshell). Fully theme-aware — it
 reuses Omarchy's `Color`/`Style` design tokens, so it automatically matches
 whatever Omarchy theme you have active.
-
-## Features
 
 - 10 progressive levels: home row → top row → bottom row → full alphabet →
   numbers/punctuation → mixed drills → timed sentences.
