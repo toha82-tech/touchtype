@@ -1,6 +1,6 @@
-// Level definitions and drill-text generation for the Blind Type trainer.
+// Level definitions and drill-text generation for the Touch Type trainer.
 // Pure JS, no Quickshell/QML imports, and no dependency on other .js
-// library files — callers (BlindType.qml) import Corpus.js separately and
+// library files — callers (TouchType.qml) import Corpus.js separately and
 // pass word lists / punctuation in explicitly. This keeps each script a
 // self-contained library, matching how other plugins in this shell keep
 // their model scripts import-free of each other.
@@ -24,8 +24,8 @@ function levels(punctuationChars) {
       passAccuracy: 90, passWpm: 0
     },
     {
-      id: "homerow", title: "Home Row", subtitle: "A S D F   J K L ;",
-      mode: "chars", keys: ["a", "s", "d", "f", "j", "k", "l", ";"], length: 90,
+      id: "homerow", title: "Home Row", subtitle: "A S D F G H J K L ;",
+      mode: "chars", keys: ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";"], length: 90,
       passAccuracy: 90, passWpm: 0
     },
     {

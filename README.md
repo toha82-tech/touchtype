@@ -1,6 +1,6 @@
-# Blind Type
+# Touch Type
 
-A guided, level-based touch-typing (blind typing) trainer plugin for the
+A guided, level-based touch-typing trainer plugin for the
 [Omarchy](https://omarchy.org/) shell (Quickshell). Fully theme-aware — it
 reuses Omarchy's `Color`/`Style` design tokens, so it automatically matches
 whatever Omarchy theme you have active.
@@ -17,39 +17,39 @@ whatever Omarchy theme you have active.
   built from your per-key hit/miss stats.
 - Daily streak tracking and best-score-per-level persistence.
 - Compact bar-widget indicator (current level + streak), click to open.
-- Omarchy menu integration: `Trigger → Blind Type → Open trainer / Reset progress`.
+- Omarchy menu integration: `Trigger → Touch Type → Open trainer / Reset progress`.
 
 ## Install
 
 Copy (or symlink) this directory into your Omarchy plugins folder:
 
 ```bash
-cp -r . ~/.config/omarchy/plugins/blindtype
+cp -r . ~/.config/omarchy/plugins/touchtype
 # or, to keep developing here and have the shell pick up live edits:
-ln -s "$(pwd)" ~/.config/omarchy/plugins/blindtype
+ln -s "$(pwd)" ~/.config/omarchy/plugins/touchtype
 ```
 
 Then register the bar widget and menu entries (already done automatically if
 you copied this from an already-configured machine; otherwise):
 
-1. Add `{"id": "blindtype"}` to `bar.layout.right` (or another section) in
+1. Add `{"id": "touchtype"}` to `bar.layout.right` (or another section) in
    `~/.config/omarchy/shell.json`.
 2. Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
    ```jsonc
-   "trigger.blindtype": {"icon":"⌨","label":"Blind Type","aliases":["blindtype","typing"]},
-   "trigger.blindtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle blindtype"},
-   "trigger.blindtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/blindtype-progress.json && omarchy-notification-send 'Blind Type' 'Progress reset'"}
+   "trigger.touchtype": {"icon":"⌨","label":"Touch Type","aliases":["touchtype","typing"]},
+   "trigger.touchtype.open": {"icon":"⌨","label":"Open trainer","action":"omarchy-shell shell toggle touchtype"},
+   "trigger.touchtype.reset": {"icon":"󰭌","label":"Reset progress","action":"rm -f ~/.local/state/omarchy/touchtype-progress.json && omarchy-notification-send 'Touch Type' 'Progress reset'"}
    ```
 3. Reload: `omarchy-shell shell rescanPlugins` (or `omarchy restart shell`).
 
 ## Usage
 
 - Click the ⌨ bar indicator, or use the Omarchy menu
-  (`Trigger → Blind Type → Open trainer`), or run
-  `omarchy-shell shell toggle blindtype`.
+  (`Trigger → Touch Type → Open trainer`), or run
+  `omarchy-shell shell toggle touchtype`.
 - Navigate levels with `↑`/`↓` + `Enter`, number keys, or mouse click.
 - `Esc` returns to the previous screen / closes the overlay.
-- Progress is stored at `~/.local/state/omarchy/blindtype-progress.json`.
+- Progress is stored at `~/.local/state/omarchy/touchtype-progress.json`.
   Reset anytime via the menu's "Reset progress" action.
 
 ## Files
@@ -57,7 +57,7 @@ you copied this from an already-configured machine; otherwise):
 | File | Purpose |
 |---|---|
 | `manifest.json` | Plugin manifest (id, kinds, entry points). |
-| `BlindType.qml` | Main overlay: menu/lesson/results screens, state machine, persistence. |
+| `TouchType.qml` | Main overlay: menu/lesson/results screens, state machine, persistence. |
 | `Keyboard.qml` | On-screen QWERTY keyboard visual, theme-derived colors. |
 | `BarWidget.qml` | Compact bar indicator (level + streak). |
 | `Corpus.js` | Word/sentence/punctuation data banks. |

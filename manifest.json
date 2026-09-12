@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "blindtype",
-  "name": "Blind Type",
+  "id": "touchtype",
+  "name": "Touch Type",
   "version": "1.0.0",
   "author": "Anton Milman",
   "license": "MIT",
@@ -12,11 +12,11 @@
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "BlindType.qml",
+    "overlay": "TouchType.qml",
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Blind Type",
+    "displayName": "Touch Type",
     "description": "Level and streak indicator; click to open the trainer",
     "category": "Productivity",
     "allowMultiple": false,

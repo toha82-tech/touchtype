@@ -6,12 +6,12 @@ import qs.Ui
 import "ProgressStore.js" as Progress
 
 // Compact bar indicator: shows the highest unlocked level number and the
-// current daily streak. Click opens the Blind Type overlay via shell.summon.
+// current daily streak. Click opens the Touch Type overlay via shell.summon.
 BarWidget {
   id: root
-  moduleName: "blindtype"
+  moduleName: "touchtype"
 
-  property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/blindtype-progress.json"
+  property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/touchtype-progress.json"
   property var progress: Progress.defaultProgress()
 
   readonly property int passedCount: {
@@ -40,11 +40,11 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: root.vertical ? "⌨" : root.displayText
-    tooltipText: "Blind Type — level " + (root.passedCount + 1) + ", " + root.streakCount + " day streak"
+    tooltipText: "Touch Type — level " + (root.passedCount + 1) + ", " + root.streakCount + " day streak"
     horizontalMargin: 8.5
 
     onPressed: function(b) {
-      if (root.bar && root.bar.shell) root.bar.shell.summon("blindtype", "{}")
+      if (root.bar && root.bar.shell) root.bar.shell.summon("touchtype", "{}")
     }
   }
 }

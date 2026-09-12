@@ -8,7 +8,7 @@ import "Curriculum.js" as Curriculum
 import "Corpus.js" as Corpus
 import "ProgressStore.js" as Progress
 
-// Blind Type — guided touch-typing trainer overlay.
+// Touch Type — guided touch-typing trainer overlay.
 //
 // Screens: "menu" (level select + streak/stats), "lesson" (live typing
 // session with keyboard hint), "results" (accuracy/wpm/time + pass/fail +
@@ -38,7 +38,7 @@ Item {
   property int cardHeight: Math.min(Style.space(640), panel.height - Style.gapsOut * 2)
 
   // ---- progress persistence -------------------------------------------
-  property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/blindtype-progress.json"
+  property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/touchtype-progress.json"
   property var progress: Progress.defaultProgress()
   readonly property var levelList: Curriculum.levels(Corpus.punctuationChars)
 
@@ -48,6 +48,44 @@ Item {
 
   // ---- level select state ---------------------------------------------
   property int selectedIndex: 0
+
+  // ---- admin menu state -------------------------------------------------
+  property bool adminOpen: false
+  property int adminIndex: 0
+  property bool resetConfirmOpen: false
+
+  readonly property var adminActions: {
+    root.progress.unlockAll // reactive: label follows the persisted unlock-all flag
+    return [
+      { id: "unlock", label: root.progress.unlockAll ? "Lock all stages" : "Open all stages" },
+      { id: "reset", label: "Reset progress", danger: true }
+    ]
+  }
+
+  function toggleUnlockAll() {
+    var next = JSON.parse(JSON.stringify(root.progress))
+    next.unlockAll = !next.unlockAll
+    root.progress = next
+    root.saveProgress()
+    root.adminOpen = false
+  }
+
+  function resetProgress() {
+    root.progress = Progress.defaultProgress()
+    root.saveProgress()
+    root.resetConfirmOpen = false
+    root.adminOpen = false
+  }
+
+  function runAdminAction(index) {
+    var action = root.adminActions[index]
+    if (!action) return
+    if (action.id === "unlock") root.toggleUnlockAll()
+    else if (action.id === "reset") {
+      root.adminOpen = false
+      root.resetConfirmOpen = true
+    }
+  }
 
   // ---- session state ----------------------------------------------------
   property int currentLevelIndex: -1
@@ -84,7 +122,7 @@ Item {
   function dismiss() {
     root.opened = false
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "blindtype")
+      root.shell.hide((root.manifest && root.manifest.id) || "touchtype")
   }
 
   function toggle() {
@@ -267,7 +305,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omarchy-blindtype"
+    WlrLayershell.namespace: "omarchy-touchtype"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
@@ -314,6 +352,18 @@ Item {
             focus: root.screen === "menu"
 
             Keys.onPressed: function(event) {
+              if (root.resetConfirmOpen) {
+                if (resetConfirm.handleKey(event)) event.accepted = true
+                return
+              }
+              if (root.adminOpen) {
+                if (event.key === Qt.Key_Escape) { root.adminOpen = false; event.accepted = true }
+                else if (event.key === Qt.Key_Up) { root.adminIndex = Math.max(0, root.adminIndex - 1); event.accepted = true }
+                else if (event.key === Qt.Key_Down) { root.adminIndex = Math.min(root.adminActions.length - 1, root.adminIndex + 1); event.accepted = true }
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.runAdminAction(root.adminIndex); event.accepted = true }
+                else { event.accepted = true }
+                return
+              }
               if (event.key === Qt.Key_Escape) { root.dismiss(); event.accepted = true }
               else if (event.key === Qt.Key_Up) { root.selectedIndex = Math.max(0, root.selectedIndex - 1); event.accepted = true }
               else if (event.key === Qt.Key_Down) { root.selectedIndex = Math.min(root.levelList.length - 1, root.selectedIndex + 1); event.accepted = true }
@@ -328,14 +378,15 @@ Item {
             spacing: Style.spacing.lg
 
             Item {
+              id: headerItem
               width: parent.width
-              height: Math.max(closeButton.height, streakBadge.height, titleText.height)
+              height: Math.max(closeButton.height, adminButton.height, streakBadge.height, titleText.height)
 
               Text {
                 id: titleText
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Blind Type"
+                text: "Touch Type"
                 color: root.foreground
                 font.family: Style.font.family
                 font.pixelSize: Style.font.display
@@ -353,10 +404,44 @@ Item {
                 MouseArea { id: closeArea; anchors.fill: parent; hoverEnabled: true; onClicked: root.dismiss() }
               }
 
+              Rectangle {
+                id: adminButton
+                height: Style.space(28)
+                width: adminButtonText.implicitWidth + Style.spacing.lg * 2
+                radius: height / 2
+                anchors.right: closeButton.left
+                anchors.rightMargin: Style.spacing.lg
+                anchors.verticalCenter: parent.verticalCenter
+                color: adminArea.containsMouse ? Util.alpha(Color.accent, 0.2) : Util.alpha(root.foreground, 0.05)
+                border.width: root.adminOpen ? 1 : 0
+                border.color: Color.accent
+
+                Text {
+                  id: adminButtonText
+                  text: "⚙ Admin"
+                  anchors.centerIn: parent
+                  color: root.foreground
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+
+                MouseArea {
+                  id: adminArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.adminIndex = 0
+                    root.adminOpen = !root.adminOpen
+                  }
+                }
+              }
+
               Row {
                 id: streakBadge
                 spacing: Style.spacing.xs
-                anchors.right: closeButton.left
+                anchors.right: adminButton.left
                 anchors.rightMargin: Style.spacing.lg
                 anchors.verticalCenter: parent.verticalCenter
                 Text { text: "🔥"; font.pixelSize: Style.font.heading }
@@ -456,6 +541,91 @@ Item {
                         font.pixelSize: Style.font.caption
                         horizontalAlignment: Text.AlignRight
                         anchors.right: parent.right
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Admin popup: a full-screen click-catcher layer so the popup
+          // dismisses when clicking outside of it, with the menu card
+          // anchored to the top-right corner just below the header.
+          Item {
+            id: adminPopupLayer
+            anchors.fill: parent
+            visible: root.adminOpen
+            z: 10
+
+            MouseArea {
+              anchors.fill: parent
+              onClicked: root.adminOpen = false
+            }
+
+            BorderSurface {
+              id: adminCard
+              width: Style.space(240)
+              height: adminCard.contentTopInset + adminCard.contentBottomInset
+                + root.adminActions.length * Style.space(38)
+                + (root.adminActions.length - 1) * Style.spacing.xs
+              anchors.top: parent.top
+              anchors.topMargin: headerItem.height + Style.spacing.sm
+              anchors.right: parent.right
+              color: root.background
+              borderSpec: root.borderSpec
+              radius: root.cornerRadius
+              padding: Style.spacing.xs
+
+              MouseArea { anchors.fill: parent; onClicked: {} }
+
+              Item {
+                anchors.fill: parent
+                anchors.topMargin: adminCard.contentTopInset
+                anchors.rightMargin: adminCard.contentRightInset
+                anchors.bottomMargin: adminCard.contentBottomInset
+                anchors.leftMargin: adminCard.contentLeftInset
+
+                Column {
+                  anchors.fill: parent
+                  spacing: Style.spacing.xs
+
+                  Repeater {
+                    model: root.adminActions
+
+                    Rectangle {
+                      required property var modelData
+                      required property int index
+                      readonly property bool isSelected: index === root.adminIndex
+                      readonly property bool isDanger: modelData.danger === true
+                      readonly property bool isHovered: adminHover.containsMouse
+
+                      width: parent.width
+                      height: Style.space(38)
+                      radius: Math.min(root.cornerRadius, 8)
+                      color: isSelected || isHovered
+                        ? Util.alpha(isDanger ? Color.urgent : Color.accent, 0.14)
+                        : "transparent"
+
+                      Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Style.spacing.md
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.label
+                        color: isDanger && (isSelected || isHovered) ? Color.urgent
+                          : ((isSelected || isHovered) ? Color.accent : root.foreground)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        font.bold: isSelected || isHovered
+                      }
+
+                      MouseArea {
+                        id: adminHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: root.adminIndex = index
+                        onClicked: root.runAdminAction(index)
                       }
                     }
                   }
@@ -699,6 +869,22 @@ Item {
             }
           }
         }
+      }
+
+      ConfirmDialog {
+        id: resetConfirm
+        anchors.fill: parent
+        opened: root.resetConfirmOpen
+        z: 50
+        message: "Reset all progress? Streaks, best scores, and weak-key stats will be cleared."
+        cancelText: "Cancel"
+        confirmText: "Reset"
+        background: root.background
+        foreground: root.foreground
+        scrim: root.scrim
+        cornerRadius: root.cornerRadius
+        onCanceled: root.resetConfirmOpen = false
+        onConfirmed: root.resetProgress()
       }
     }
   }
