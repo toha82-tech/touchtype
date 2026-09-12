@@ -1,4 +1,4 @@
-# Touch Type
+# Touch Typing Trainer
 
 Touch (Blind) typing is hugely overrated in the age of AI, but if you want to go old-school and actually use a keyboard, you better be quick.
 Enjoy training Touch typing using this plugin while you agent is writing your code.
