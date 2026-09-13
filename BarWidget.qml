@@ -9,7 +9,6 @@ import "ProgressStore.js" as Progress
 // current daily streak. Click opens the Touch Type overlay via shell.summon.
 BarWidget {
   id: root
-  moduleName: "touchtype"
 
   property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/touchtype-progress.json"
   property var progress: Progress.defaultProgress()
@@ -44,7 +43,7 @@ BarWidget {
     horizontalMargin: 8.5
 
     onPressed: function(b) {
-      if (root.bar && root.bar.shell) root.bar.shell.summon("touchtype", "{}")
+      if (root.bar && root.bar.shell) root.bar.shell.summon(root.moduleName, "{}")
     }
   }
 }
