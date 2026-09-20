@@ -6,8 +6,8 @@ import qs.Ui
 import "ProgressStore.js" as Progress
 import "Curriculum.js" as Curriculum
 
-// Compact bar indicator: Finger Gym level + Classic level + daily streak.
-// Click opens the Touch Type overlay via shell.summon.
+// Compact bar indicator: keyboard icon plus daily streak.
+// Hover shows per-track progress; click opens the Touch Type overlay.
 BarWidget {
   id: root
 
@@ -28,7 +28,7 @@ BarWidget {
   readonly property int fingerPassed: root.countPassed(root.fingerList)
   readonly property int classicPassed: root.countPassed(root.levelList)
   readonly property int streakCount: root.progress.streak.count || 0
-  readonly property string displayText: "🖐" + (root.fingerPassed + 1) + " ⌨" + (root.classicPassed + 1) + (root.streakCount > 0 ? "  🔥" + root.streakCount : "")
+  readonly property string displayText: "⌨" + (root.streakCount > 0 ? "  🔥" + root.streakCount : "")
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
