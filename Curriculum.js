@@ -74,6 +74,90 @@ function levels(punctuationChars) {
   ]
 }
 
+// Standard touch-typing finger assignment (letters + home/bottom-row
+// punctuation). Numbers-row and symbol assignments live in fingerMeta below.
+var fingerKeys = {
+  index: ["r", "f", "v", "t", "g", "b", "y", "u", "h", "j", "n", "m"],
+  middle: ["e", "d", "c", "i", "k", ","],
+  ring: ["w", "s", "x", "o", "l", "."],
+  pinky: ["q", "a", "z", "p", ";", "/", "'"]
+}
+
+// Fixed pedagogical palette — one hue per finger pair so learners can
+// associate colors with fingers. Kept readable on both dark and light
+// themes by applying them at low alpha for zones and full for highlights.
+var fingerMeta = {
+  index: { id: "index", label: "Index fingers", color: "#4fa3e3" },
+  middle: { id: "middle", label: "Middle fingers", color: "#5fc184" },
+  ring: { id: "ring", label: "Ring fingers", color: "#e5a35c" },
+  pinky: { id: "pinky", label: "Pinky fingers", color: "#d67ab1" }
+}
+
+var numberKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+
+var punctuationKeys = [",", ".", ";", "'", "/", "-", "=", "[", "]", "!", "?", ":", "\"", "(", ")"]
+
+// Finger Gym — a beginner track that trains one finger pair (both hands
+// together) at a time, easiest first. Letters first for every finger, then
+// one combined numbers level and one combined punctuation level.
+// Independent unlock chain from the classic track; level ids are namespaced
+// with "finger-" so progress never collides with classic levels.
+function fingerLevels() {
+  return [
+    {
+      id: "finger-index", track: "finger", finger: "index",
+      title: "Index Fingers", subtitle: "R F V T G B · Y U H J N M",
+      mode: "chars", keys: fingerKeys.index, length: 80,
+      passAccuracy: 90, passWpm: 0
+    },
+    {
+      id: "finger-middle", track: "finger", finger: "middle",
+      title: "Middle Fingers", subtitle: "E D C · I K ,",
+      mode: "chars", keys: fingerKeys.middle, length: 70,
+      passAccuracy: 90, passWpm: 0
+    },
+    {
+      id: "finger-ring", track: "finger", finger: "ring",
+      title: "Ring Fingers", subtitle: "W S X · O L .",
+      mode: "chars", keys: fingerKeys.ring, length: 70,
+      passAccuracy: 90, passWpm: 0
+    },
+    {
+      id: "finger-pinky", track: "finger", finger: "pinky",
+      title: "Pinky Fingers", subtitle: "Q A Z · P ; / '",
+      mode: "chars", keys: fingerKeys.pinky, length: 70,
+      passAccuracy: 90, passWpm: 0
+    },
+    {
+      id: "finger-numbers", track: "finger", finger: "",
+      title: "Numbers Row", subtitle: "1–0 across all fingers",
+      mode: "chars", keys: numberKeys, length: 90,
+      passAccuracy: 85, passWpm: 0
+    },
+    {
+      id: "finger-punct", track: "finger", finger: "",
+      title: "Punctuation", subtitle: ", . ; ' / - = [ ] ! ? :",
+      mode: "chars", keys: punctuationKeys, length: 90,
+      passAccuracy: 85, passWpm: 0
+    }
+  ]
+}
+
+// Maps a drill key to its finger id ("index" | "middle" | "ring" | "pinky"
+// | ""). Used to color-code the on-screen keyboard.
+function fingerForKey(ch) {
+  var lower = (ch || "").toLowerCase()
+  for (var finger in fingerKeys) {
+    if (fingerKeys[finger].indexOf(lower) !== -1) return finger
+  }
+  var digitFingers = { "1": "pinky", "2": "ring", "3": "middle", "4": "index", "5": "index", "6": "index", "7": "index", "8": "middle", "9": "ring", "0": "pinky" }
+  if (digitFingers[lower] !== undefined) return digitFingers[lower]
+  var symbolBase = { "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", "{": "[", "}": "]", "|": "\\", ":": ";", "\"": "'", "<": ",", ">": ".", "?": "/" }
+  if (symbolBase[lower] !== undefined) return fingerForKey(symbolBase[lower])
+  if (["-", "=", "[", "]", "\\", "`"].indexOf(lower) !== -1) return "pinky"
+  return ""
+}
+
 function levelById(list, id) {
   for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]
   return null

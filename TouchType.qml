@@ -41,13 +41,56 @@ Item {
   property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/touchtype-progress.json"
   property var progress: Progress.defaultProgress()
   readonly property var levelList: Curriculum.levels(Corpus.punctuationChars)
+  readonly property var fingerList: Curriculum.fingerLevels()
+
+  // Board keys shown in Keyboard.qml, mapped to finger ids for zone tinting.
+  readonly property var boardKeys: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+    "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+    "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'",
+    "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "-", "=", "[", "]"]
+  readonly property var keyFingerMap: {
+    var map = {}
+    for (var i = 0; i < root.boardKeys.length; i++) {
+      var f = Curriculum.fingerForKey(root.boardKeys[i])
+      if (f !== "") map[root.boardKeys[i]] = f
+    }
+    return map
+  }
+  readonly property var fingerColors: ({
+    "index": Curriculum.fingerMeta.index.color,
+    "middle": Curriculum.fingerMeta.middle.color,
+    "ring": Curriculum.fingerMeta.ring.color,
+    "pinky": Curriculum.fingerMeta.pinky.color
+  })
 
   function saveProgress() {
     progressFile.setText(Progress.toJsonText(root.progress))
   }
 
-  // ---- level select state ---------------------------------------------
+  // ---- level select state (two independent tracks) ----------------------
+  property string selectedTrack: "finger" // "finger" | "classic"
   property int selectedIndex: 0
+
+  function trackLevels(track) {
+    return track === "finger" ? root.fingerList : root.levelList
+  }
+
+  function switchTrack(track) {
+    if (track !== "finger" && track !== "classic") return
+    root.selectedTrack = track
+    var list = root.trackLevels(track)
+    root.selectedIndex = Math.max(0, Math.min(root.selectedIndex, list.length - 1))
+  }
+
+  function passedCount(track) {
+    var list = root.trackLevels(track)
+    var n = 0
+    for (var i = 0; i < list.length; i++) {
+      var entry = root.progress.levels[list[i].id]
+      if (entry && entry.passed) n++
+    }
+    return n
+  }
 
   // ---- admin menu state -------------------------------------------------
   property bool adminOpen: false
@@ -88,6 +131,8 @@ Item {
   }
 
   // ---- session state ----------------------------------------------------
+  property string currentTrack: "classic" // track of the running lesson
+  property string currentFinger: ""       // finger id for Finger Gym lessons
   property int currentLevelIndex: -1
   property string targetText: ""
   property var typedResults: []   // true/false per typed position, undefined = not yet typed
@@ -102,7 +147,9 @@ Item {
   // ---- last result (for the results screen) ---------------------------
   property var lastResult: null
 
-  readonly property var currentLevel: root.currentLevelIndex >= 0 ? root.levelList[root.currentLevelIndex] : null
+  readonly property var currentLevel: root.currentLevelIndex >= 0 ? root.trackLevels(root.currentTrack)[root.currentLevelIndex] : null
+  readonly property string currentFingerLabel: root.currentFinger !== "" && Curriculum.fingerMeta[root.currentFinger] ? Curriculum.fingerMeta[root.currentFinger].label : ""
+  readonly property color currentFingerColor: root.currentFinger !== "" && Curriculum.fingerMeta[root.currentFinger] ? Curriculum.fingerMeta[root.currentFinger].color : Color.accent
 
   function open(payloadJson) {
     root.opened = true
@@ -130,23 +177,27 @@ Item {
     else root.open("{}")
   }
 
-  // ---- level helpers ----------------------------------------------------
-  function unlocked(index) {
-    return Progress.isUnlocked(root.progress, root.levelList, index)
+  // ---- level helpers (per-track independent unlock chains) --------------
+  function unlocked(track, index) {
+    return Progress.isUnlocked(root.progress, root.trackLevels(track), index)
   }
 
-  function levelEntry(index) {
-    return Progress.levelEntry(root.progress, root.levelList[index].id)
+  function levelEntry(track, index) {
+    return Progress.levelEntry(root.progress, root.trackLevels(track)[index].id)
   }
 
   function wordListFn(name) {
     return Corpus.wordList(name)
   }
 
-  function startLevel(index) {
-    if (!root.unlocked(index)) return
+  function startLevel(track, index) {
+    var list = root.trackLevels(track)
+    if (index < 0 || index >= list.length || !root.unlocked(track, index)) return
+    var level = list[index]
+    root.currentTrack = track
+    root.currentFinger = level.finger || ""
     root.currentLevelIndex = index
-    root.targetText = Curriculum.buildDrill(root.levelList[index], Math.random, root.wordListFn, Corpus.sentences)
+    root.targetText = Curriculum.buildDrill(level, Math.random, root.wordListFn, Corpus.sentences)
     root.typedResults = []
     root.typedIndex = 0
     root.sessionKeyResults = {}
@@ -159,7 +210,7 @@ Item {
   }
 
   function restartLevel() {
-    if (root.currentLevelIndex >= 0) root.startLevel(root.currentLevelIndex)
+    if (root.currentLevelIndex >= 0) root.startLevel(root.currentTrack, root.currentLevelIndex)
   }
 
   function backToMenu() {
@@ -214,13 +265,14 @@ Item {
   }
 
   function nextLevelAvailable() {
+    var list = root.trackLevels(root.currentTrack)
     return root.currentLevelIndex >= 0
-      && root.currentLevelIndex + 1 < root.levelList.length
-      && root.unlocked(root.currentLevelIndex + 1)
+      && root.currentLevelIndex + 1 < list.length
+      && root.unlocked(root.currentTrack, root.currentLevelIndex + 1)
   }
 
   function goToNextLevel() {
-    if (root.nextLevelAvailable()) root.startLevel(root.currentLevelIndex + 1)
+    if (root.nextLevelAvailable()) root.startLevel(root.currentTrack, root.currentLevelIndex + 1)
   }
 
   // ---- rich-text rendering of the typed/target text ---------------------
@@ -365,11 +417,22 @@ Item {
                 return
               }
               if (event.key === Qt.Key_Escape) { root.dismiss(); event.accepted = true }
+              else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Tab) {
+                root.switchTrack(root.selectedTrack === "finger" ? "classic" : "finger")
+                event.accepted = true
+              }
               else if (event.key === Qt.Key_Up) { root.selectedIndex = Math.max(0, root.selectedIndex - 1); event.accepted = true }
-              else if (event.key === Qt.Key_Down) { root.selectedIndex = Math.min(root.levelList.length - 1, root.selectedIndex + 1); event.accepted = true }
-              else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.startLevel(root.selectedIndex); event.accepted = true }
-              else if (event.text >= "1" && event.text <= "9") { root.selectedIndex = event.text.charCodeAt(0) - "1".charCodeAt(0); event.accepted = true }
-              else if (event.text === "0") { root.selectedIndex = 9; event.accepted = true }
+              else if (event.key === Qt.Key_Down) { root.selectedIndex = Math.min(root.trackLevels(root.selectedTrack).length - 1, root.selectedIndex + 1); event.accepted = true }
+              else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.startLevel(root.selectedTrack, root.selectedIndex); event.accepted = true }
+              else if (event.text >= "1" && event.text <= "9") {
+                var pickIdx = event.text.charCodeAt(0) - "1".charCodeAt(0)
+                if (pickIdx < root.trackLevels(root.selectedTrack).length) root.selectedIndex = pickIdx
+                event.accepted = true
+              }
+              else if (event.text === "0") {
+                if (9 < root.trackLevels(root.selectedTrack).length) root.selectedIndex = 9
+                event.accepted = true
+              }
             }
           }
 
@@ -456,7 +519,7 @@ Item {
             }
 
             Text {
-              text: "Guided touch-typing levels. Use ↑↓ + Enter, number keys, or click a level."
+              text: "Train each finger pair, or run the classic course. Use ←/→ to switch tracks, ↑↓ + Enter, number keys, or click."
               color: Color.muted
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
@@ -464,20 +527,63 @@ Item {
 
             Rectangle { width: parent.width; height: 1; color: Util.alpha(root.foreground, 0.1) }
 
+            Row {
+              width: parent.width
+              spacing: Style.spacing.sm
+
+              Repeater {
+                model: [
+                  { track: "finger", label: "🖐 Finger Gym", count: root.passedCount("finger"), total: root.fingerList.length },
+                  { track: "classic", label: "⌨ Classic Course", count: root.passedCount("classic"), total: root.levelList.length }
+                ]
+
+                Rectangle {
+                  required property var modelData
+                  required property int index
+                  readonly property bool isActive: modelData.track === root.selectedTrack
+
+                  width: (parent.width - Style.spacing.sm) / 2
+                  height: Style.space(38)
+                  radius: Math.min(root.cornerRadius, 8)
+                  color: isActive ? Util.alpha(Color.accent, 0.14) : Util.alpha(root.foreground, 0.04)
+                  border.width: isActive ? 1 : 0
+                  border.color: Color.accent
+
+                  Text {
+                    anchors.centerIn: parent
+                    text: modelData.label + "  " + modelData.count + "/" + modelData.total
+                    color: isActive ? Color.accent : root.foreground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.bold: isActive
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.switchTrack(modelData.track)
+                  }
+                }
+              }
+            }
+
             Column {
               width: parent.width
               spacing: Style.spacing.sm
 
               Repeater {
-                model: root.levelList
+                model: root.trackLevels(root.selectedTrack)
 
                 Rectangle {
                   id: levelRow
                   required property var modelData
                   required property int index
                   readonly property bool isSelected: index === root.selectedIndex
-                  readonly property bool isUnlocked: root.unlocked(index)
-                  readonly property var entry: root.levelEntry(index)
+                  readonly property bool isUnlocked: root.unlocked(root.selectedTrack, index)
+                  readonly property var entry: root.levelEntry(root.selectedTrack, index)
+                  readonly property string finger: modelData.finger || ""
+                  readonly property color fingerColor: finger !== "" ? root.fingerColors[finger] : "transparent"
 
                   width: parent.width
                   height: Style.space(52)
@@ -491,8 +597,8 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: levelRow.isUnlocked ? Qt.PointingHandCursor : Qt.ArrowCursor
-                    onEntered: root.selectedIndex = levelRow.index
-                    onClicked: root.startLevel(levelRow.index)
+                    onEntered: { root.selectedIndex = levelRow.index }
+                    onClicked: root.startLevel(root.selectedTrack, levelRow.index)
                   }
 
                   Row {
@@ -505,7 +611,7 @@ Item {
                       width: Style.space(28)
                       anchors.verticalCenter: parent.verticalCenter
                       text: levelRow.isUnlocked ? String(levelRow.index + 1) : "🔒"
-                      color: levelRow.entry.passed ? Color.accent : root.foreground
+                      color: levelRow.finger !== "" ? levelRow.fingerColor : (levelRow.entry.passed ? Color.accent : root.foreground)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.heading
                       horizontalAlignment: Text.AlignHCenter
@@ -668,7 +774,7 @@ Item {
               Text {
                 id: lessonTitle
                 anchors.left: parent.left
-                text: root.currentLevel ? ((root.currentLevelIndex + 1) + ". " + root.currentLevel.title) : ""
+                text: root.currentLevel ? ((root.currentTrack === "finger" ? "🖐 " : "") + (root.currentLevelIndex + 1) + ". " + root.currentLevel.title) : ""
                 color: root.foreground
                 font.family: Style.font.family
                 font.pixelSize: Style.font.heading
@@ -745,9 +851,72 @@ Item {
 
             Item { width: 1; height: Style.spacing.md }
 
+            // Finger Gym banner: which finger(s) to use for this drill.
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.spacing.sm
+              visible: root.currentTrack === "finger"
+              height: visible ? implicitHeight : 0
+
+              Rectangle {
+                visible: root.currentFinger !== ""
+                width: Style.space(10); height: Style.space(10)
+                radius: width / 2
+                color: root.currentFingerColor
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              Text {
+                visible: root.currentFinger !== ""
+                text: root.currentFingerLabel + " — press the tinted keys"
+                color: root.currentFingerColor
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                visible: root.currentFinger === ""
+                text: "Keys tinted by finger:"
+                color: Color.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              Repeater {
+                visible: root.currentFinger === ""
+                model: [
+                  { id: "index", abbr: "I" },
+                  { id: "middle", abbr: "M" },
+                  { id: "ring", abbr: "R" },
+                  { id: "pinky", abbr: "P" }
+                ]
+                Row {
+                  required property var modelData
+                  spacing: Style.spacing.xs
+                  Rectangle {
+                    width: Style.space(10); height: Style.space(10)
+                    radius: width / 2
+                    color: root.fingerColors[modelData.id]
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                  Text {
+                    text: modelData.abbr
+                    color: Color.muted
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+              }
+            }
+
             Keyboard {
               anchors.horizontalCenter: parent.horizontalCenter
               nextChar: root.nextChar
+              keyFingerMap: root.currentTrack === "finger" ? root.keyFingerMap : ({})
+              fingerColors: root.fingerColors
+              activeFinger: root.currentTrack === "finger" ? root.currentFinger : ""
             }
           }
         }

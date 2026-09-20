@@ -11,10 +11,20 @@ Item {
   // Next character the drill expects, exactly as it appears in the target
   // text (may be uppercase, a digit, punctuation, or a single space).
   property string nextChar: ""
+  // Finger color-coding (set by the lesson screen for Finger Gym levels):
+  // keyFingerMap maps a board key ("q", ";", "1", "-", ...) to a finger id
+  // ("index" | "middle" | "ring" | "pinky"), fingerColors maps each finger
+  // id to its display color, and activeFinger restricts the zone tint to a
+  // single finger pair ("" = tint every mapped key, for combined levels).
+  property var keyFingerMap: ({})
+  property var fingerColors: ({})
+  property string activeFinger: ""
   property real keySize: Style.space(34)
   property real keyGap: Style.spacing.xs
 
-  readonly property var shiftMap: ({ "!": "1", "?": "/", ":": ";", "\"": "'" })
+  // Shifted symbols map back to their base key; everything else matches the
+  // board directly (board rows are lowercase, digits, or literal symbols).
+  readonly property var shiftMap: ({ "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0", "_": "-", "+": "=", "{": "[", "}": "]", "?": "/", ":": ";", "\"": "'" })
   readonly property string baseKey: {
     if (root.nextChar === "" || root.nextChar === " ") return root.nextChar
     if (root.shiftMap[root.nextChar] !== undefined) return root.shiftMap[root.nextChar]
@@ -28,7 +38,8 @@ Item {
     ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
     ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"],
-    ["shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/"]
+    ["shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/"],
+    ["-", "=", "[", "]"]
   ]
 
   implicitWidth: column.implicitWidth
@@ -47,8 +58,9 @@ Item {
         required property int index
         readonly property int rowIndex: index
         spacing: root.keyGap
-        // Stagger rows slightly to mimic a real keyboard's key offsets.
-        leftPadding: rowIndex === 1 ? root.keySize * 0.3 : rowIndex === 2 ? root.keySize * 0.5 : rowIndex === 3 ? 0 : 0
+        // Stagger rows slightly to mimic a real keyboard's key offsets; the
+        // short symbol row is optically centered under the rows above.
+        leftPadding: rowIndex === 1 ? root.keySize * 0.3 : rowIndex === 2 ? root.keySize * 0.5 : rowIndex === 4 ? root.keySize * 3.2 : 0
 
         Repeater {
           model: parent.modelData
@@ -59,13 +71,20 @@ Item {
             readonly property bool isShiftKey: modelData === "shift"
             readonly property bool isHome: modelData === "f" || modelData === "j"
             readonly property bool active: isShiftKey ? root.needsShift : (modelData === root.baseKey && root.baseKey !== "")
+            // Finger zone membership: tinted when this key belongs to the
+            // trained finger (or to any mapped finger on combined levels).
+            readonly property string finger: root.keyFingerMap[modelData] || ""
+            readonly property bool inZone: finger !== "" && (root.activeFinger === "" || root.activeFinger === finger)
+            readonly property color fingerColor: root.fingerColors[finger] || "transparent"
 
             width: isShiftKey ? root.keySize * 1.6 : root.keySize
             height: root.keySize
             radius: Style.cornerRadius > 0 ? Math.min(Style.cornerRadius, 6) : 4
-            color: active ? Util.alpha(Color.accent, 0.28) : Util.alpha(Color.foreground, 0.05)
-            border.width: active ? Math.max(1, Style.space(2)) : 1
-            border.color: active ? Color.accent : Util.alpha(Color.foreground, 0.18)
+            color: active ? (finger !== "" ? Util.alpha(fingerColor, 0.38) : Util.alpha(Color.accent, 0.28))
+              : (inZone ? Util.alpha(fingerColor, 0.16) : Util.alpha(Color.foreground, 0.05))
+            border.width: active || inZone ? Math.max(1, Style.space(2)) : 1
+            border.color: active ? (finger !== "" ? fingerColor : Color.accent)
+              : (inZone ? Util.alpha(fingerColor, 0.55) : Util.alpha(Color.foreground, 0.18))
 
             Behavior on color { ColorAnimation { duration: 90 } }
             Behavior on border.color { ColorAnimation { duration: 90 } }
@@ -73,7 +92,7 @@ Item {
             Text {
               anchors.centerIn: parent
               text: keyCap.isShiftKey ? "⇧" : keyCap.modelData.toUpperCase()
-              color: keyCap.active ? Color.accent : Color.muted
+              color: keyCap.active ? (keyCap.finger !== "" ? keyCap.fingerColor : Color.accent) : Color.muted
               font.family: Style.font.family
               font.pixelSize: keyCap.isShiftKey ? Style.font.bodySmall : Style.font.body
               font.bold: keyCap.active

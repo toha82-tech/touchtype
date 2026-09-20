@@ -4,22 +4,31 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "ProgressStore.js" as Progress
+import "Curriculum.js" as Curriculum
 
-// Compact bar indicator: shows the highest unlocked level number and the
-// current daily streak. Click opens the Touch Type overlay via shell.summon.
+// Compact bar indicator: Finger Gym level + Classic level + daily streak.
+// Click opens the Touch Type overlay via shell.summon.
 BarWidget {
   id: root
 
   property string progressPath: Quickshell.env("HOME") + "/.local/state/omarchy/touchtype-progress.json"
   property var progress: Progress.defaultProgress()
 
-  readonly property int passedCount: {
+  readonly property var fingerList: Curriculum.fingerLevels()
+  readonly property var levelList: Curriculum.levels([])
+
+  function countPassed(list) {
     var n = 0
-    for (var id in root.progress.levels) if (root.progress.levels[id] && root.progress.levels[id].passed) n++
+    for (var i = 0; i < list.length; i++) {
+      var entry = root.progress.levels[list[i].id]
+      if (entry && entry.passed) n++
+    }
     return n
   }
+  readonly property int fingerPassed: root.countPassed(root.fingerList)
+  readonly property int classicPassed: root.countPassed(root.levelList)
   readonly property int streakCount: root.progress.streak.count || 0
-  readonly property string displayText: "⌨ " + (root.passedCount + 1) + (root.streakCount > 0 ? "  🔥" + root.streakCount : "")
+  readonly property string displayText: "🖐" + (root.fingerPassed + 1) + " ⌨" + (root.classicPassed + 1) + (root.streakCount > 0 ? "  🔥" + root.streakCount : "")
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -39,7 +48,7 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: root.vertical ? "⌨" : root.displayText
-    tooltipText: "Touch Type — level " + (root.passedCount + 1) + ", " + root.streakCount + " day streak"
+    tooltipText: "Touch Type — Finger Gym " + (root.fingerPassed + 1) + "/" + root.fingerList.length + ", Classic " + (root.classicPassed + 1) + "/" + root.levelList.length + ", " + root.streakCount + " day streak"
     horizontalMargin: 8.5
 
     onPressed: function(b) {

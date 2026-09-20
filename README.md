@@ -10,16 +10,22 @@ A guided, level-based touch-typing trainer plugin for the
 reuses Omarchy's `Color`/`Style` design tokens, so it automatically matches
 whatever Omarchy theme you have active.
 
-- 10 progressive levels: home row → top row → bottom row → full alphabet →
+- 🖐 Finger Gym beginner track: one level per finger pair (both hands
+  together, easiest first — index → middle → ring → pinky), letters first,
+  then a combined numbers-row level and a combined punctuation level. Each
+  track unlocks independently.
+- 10 progressive classic levels: home row → top row → bottom row → full alphabet →
   numbers/punctuation → mixed drills → timed sentences.
 - Levels unlock as you pass the one before them (accuracy threshold per level).
 - Live on-screen keyboard that highlights the next expected key (with
-  shift-key hinting) and marks the F/J home-row bumps.
+  shift-key hinting) and marks the F/J home-row bumps. Finger Gym levels
+  additionally tint each key by finger (index = blue, middle = green,
+  ring = orange, pinky = pink) and show which fingers to use.
 - Live stats while typing: elapsed time, WPM, accuracy.
 - Results screen: pass/fail, accuracy/WPM/time, and a "weakest keys" heatmap
   built from your per-key hit/miss stats.
 - Daily streak tracking and best-score-per-level persistence.
-- Compact bar-widget indicator (current level + streak), click to open.
+- Compact bar-widget indicator (Finger Gym level + Classic level + streak), click to open.
 - Omarchy menu integration: `Trigger → Touch Type → Open trainer / Reset progress`.
 
 ## Install
@@ -63,6 +69,7 @@ The file hot-reloads on save — no restart needed.
   or (if you added the optional menu entries) use
   `Trigger → Touch Type → Open trainer`.
 - Navigate levels with `↑`/`↓` + `Enter`, number keys, or mouse click.
+  Switch tracks with `←`/`→` (or `Tab`), or by clicking the track tabs.
 - `Esc` returns to the previous screen / closes the overlay.
 - Progress is stored at `~/.local/state/omarchy/touchtype-progress.json`.
   Reset anytime by deleting that file, or via the optional menu's
@@ -96,7 +103,7 @@ rm -f ~/.local/state/omarchy/touchtype-progress.json
 | `Keyboard.qml` | On-screen QWERTY keyboard visual, theme-derived colors. |
 | `BarWidget.qml` | Compact bar indicator (level + streak). |
 | `Corpus.js` | Word/sentence/punctuation data banks. |
-| `Curriculum.js` | 10-level curriculum definitions + drill-text generators. |
+| `Curriculum.js` | 10-level classic curriculum + 6-level Finger Gym definitions, finger key maps, drill-text generators. |
 | `ProgressStore.js` | Progress persistence, accuracy/WPM/streak calculators. |
 
 ## License
