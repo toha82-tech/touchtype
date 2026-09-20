@@ -44,10 +44,10 @@ Item {
   readonly property var fingerList: Curriculum.fingerLevels()
 
   // Board keys shown in Keyboard.qml, mapped to finger ids for zone tinting.
-  readonly property var boardKeys: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
-    "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+  readonly property var boardKeys: ["`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=",
+    "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\",
     "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'",
-    "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "-", "=", "[", "]"]
+    "z", "x", "c", "v", "b", "n", "m", ",", ".", "/"]
   readonly property var keyFingerMap: {
     var map = {}
     for (var i = 0; i < root.boardKeys.length; i++) {

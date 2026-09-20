@@ -34,17 +34,25 @@ Item {
   readonly property bool isUpperLetter: root.nextChar !== "" && root.nextChar !== root.nextChar.toLowerCase() && root.nextChar === root.nextChar.toUpperCase()
   readonly property bool needsShift: root.isUpperLetter || root.shiftMap[root.nextChar] !== undefined
 
-  // Strict grid columns (no stagger) so each finger column lines up
-  // vertically: Q/A/Z, W/S/X, etc. Symbols live on their real rows:
-  // "- =" extend the number row, "[ ]" extend the Q row. Shift sits at the
-  // right end of the bottom row (like a real right-shift) so the letter
-  // columns stay aligned; it still lights up whenever shift is needed.
+  // Full-size layout modeled on a real keyboard: staggered rows via wide
+  // edge keys (Tab / Caps / Shift on the left, Backspace / Enter / Shift on
+  // the right), "`" and "\" included, and Ctrl/Win/Alt on both sides of a
+  // wide spacebar. Every row is 15 units wide. Modifier keys are purely
+  // visual (drills never expect them) except Shift, which lights up on both
+  // sides whenever the next character needs it, and Space, which lights up
+  // for word gaps. Purely visual — reads no real keyboard events itself.
   readonly property var rows: [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="],
-    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]"],
-    ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"],
-    ["z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "shift"]
+    ["`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "backspace"],
+    ["tab", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"],
+    ["caps", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "enter"],
+    ["shiftL", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "shiftR"],
+    ["ctrl", "win", "alt", "space", "alt", "win", "menu", "ctrl"]
   ]
+
+  // Widths in key units; anything unlisted is a standard 1-unit key.
+  readonly property var keyWidths: ({ "backspace": 2, "tab": 1.5, "\\": 1.5, "caps": 1.75, "enter": 2.25, "shiftL": 2.25, "shiftR": 2.75, "space": 8 })
+  // Display labels; anything unlisted shows as its uppercase self.
+  readonly property var keyLabels: ({ "tab": "Tab", "caps": "Caps", "enter": "Enter", "shiftL": "⇧", "shiftR": "⇧", "backspace": "⌫", "ctrl": "Ctrl", "alt": "Alt", "win": "Win", "menu": "Menu", "space": "space" })
 
   implicitWidth: column.implicitWidth
   implicitHeight: column.implicitHeight
@@ -68,16 +76,18 @@ Item {
           Rectangle {
             id: keyCap
             required property string modelData
-            readonly property bool isShiftKey: modelData === "shift"
+            readonly property bool isShiftKey: modelData === "shiftL" || modelData === "shiftR"
+            readonly property bool isSpaceKey: modelData === "space"
             readonly property bool isHome: modelData === "f" || modelData === "j"
-            readonly property bool active: isShiftKey ? root.needsShift : (modelData === root.baseKey && root.baseKey !== "")
+            readonly property bool active: isShiftKey ? root.needsShift
+              : (isSpaceKey ? root.baseKey === " " : (modelData === root.baseKey && root.baseKey !== ""))
             // Finger zone membership: tinted when this key belongs to the
             // trained finger (or to any mapped finger on combined levels).
             readonly property string finger: root.keyFingerMap[modelData] || ""
             readonly property bool inZone: finger !== "" && (root.activeFinger === "" || root.activeFinger === finger)
             readonly property color fingerColor: root.fingerColors[finger] || "transparent"
 
-            width: isShiftKey ? root.keySize * 1.6 : root.keySize
+            width: (root.keyWidths[modelData] || 1) * root.keySize
             height: root.keySize
             radius: Style.cornerRadius > 0 ? Math.min(Style.cornerRadius, 6) : 4
             color: active ? (finger !== "" ? Util.alpha(fingerColor, 0.38) : Util.alpha(Color.accent, 0.28))
@@ -91,10 +101,10 @@ Item {
 
             Text {
               anchors.centerIn: parent
-              text: keyCap.isShiftKey ? "⇧" : keyCap.modelData.toUpperCase()
+              text: root.keyLabels[keyCap.modelData] || keyCap.modelData.toUpperCase()
               color: keyCap.active ? (keyCap.finger !== "" ? keyCap.fingerColor : Color.accent) : Color.muted
               font.family: Style.font.family
-              font.pixelSize: keyCap.isShiftKey ? Style.font.bodySmall : Style.font.body
+              font.pixelSize: keyCap.modelData.length > 1 ? Style.font.bodySmall : Style.font.body
               font.bold: keyCap.active
             }
 
@@ -112,30 +122,6 @@ Item {
             }
           }
         }
-      }
-    }
-
-    Rectangle {
-      id: spaceBar
-      readonly property bool active: root.baseKey === " "
-      width: root.keySize * 8
-      height: root.keySize
-      anchors.horizontalCenter: parent.horizontalCenter
-      radius: Style.cornerRadius > 0 ? Math.min(Style.cornerRadius, 6) : 4
-      color: active ? Util.alpha(Color.accent, 0.28) : Util.alpha(Color.foreground, 0.05)
-      border.width: active ? Math.max(1, Style.space(2)) : 1
-      border.color: active ? Color.accent : Util.alpha(Color.foreground, 0.18)
-
-      Behavior on color { ColorAnimation { duration: 90 } }
-      Behavior on border.color { ColorAnimation { duration: 90 } }
-
-      Text {
-        anchors.centerIn: parent
-        text: "space"
-        color: spaceBar.active ? Color.accent : Color.muted
-        font.family: Style.font.family
-        font.pixelSize: Style.font.bodySmall
-        font.bold: spaceBar.active
       }
     }
   }
