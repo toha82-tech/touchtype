@@ -34,12 +34,16 @@ Item {
   readonly property bool isUpperLetter: root.nextChar !== "" && root.nextChar !== root.nextChar.toLowerCase() && root.nextChar === root.nextChar.toUpperCase()
   readonly property bool needsShift: root.isUpperLetter || root.shiftMap[root.nextChar] !== undefined
 
+  // Strict grid columns (no stagger) so each finger column lines up
+  // vertically: Q/A/Z, W/S/X, etc. Symbols live on their real rows:
+  // "- =" extend the number row, "[ ]" extend the Q row. Shift sits at the
+  // right end of the bottom row (like a real right-shift) so the letter
+  // columns stay aligned; it still lights up whenever shift is needed.
   readonly property var rows: [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="],
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]"],
     ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"],
-    ["shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/"],
-    ["-", "=", "[", "]"]
+    ["z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "shift"]
   ]
 
   implicitWidth: column.implicitWidth
@@ -56,11 +60,7 @@ Item {
       Row {
         required property var modelData
         required property int index
-        readonly property int rowIndex: index
         spacing: root.keyGap
-        // Stagger rows slightly to mimic a real keyboard's key offsets; the
-        // short symbol row is optically centered under the rows above.
-        leftPadding: rowIndex === 1 ? root.keySize * 0.3 : rowIndex === 2 ? root.keySize * 0.5 : rowIndex === 4 ? root.keySize * 3.2 : 0
 
         Repeater {
           model: parent.modelData
@@ -118,7 +118,7 @@ Item {
     Rectangle {
       id: spaceBar
       readonly property bool active: root.baseKey === " "
-      width: root.keySize * 6
+      width: root.keySize * 8
       height: root.keySize
       anchors.horizontalCenter: parent.horizontalCenter
       radius: Style.cornerRadius > 0 ? Math.min(Style.cornerRadius, 6) : 4
@@ -128,6 +128,15 @@ Item {
 
       Behavior on color { ColorAnimation { duration: 90 } }
       Behavior on border.color { ColorAnimation { duration: 90 } }
+
+      Text {
+        anchors.centerIn: parent
+        text: "space"
+        color: spaceBar.active ? Color.accent : Color.muted
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+        font.bold: spaceBar.active
+      }
     }
   }
 }
